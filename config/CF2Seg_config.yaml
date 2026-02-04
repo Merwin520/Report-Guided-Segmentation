@@ -1,0 +1,97 @@
+DATA:
+  dataset:             
+  data_root:
+  use_augmentation: true             
+  aug_probability: 0.7           
+
+TRAIN:
+  visual_adapter_dim: 128
+  visual_adapter_layer: [1,3,5,7,9,11]
+  txt_adapter_dim: 64
+  txtual_adapter_layer: [1,3,5,7,9,11]
+  
+  cxr_bert_model: ""
+  dino_pretrain: pretrain/backbone_compatible.safetensors
+  dino_layers: 12
+  output_dinov2: [4, 8]
+  model_name: CXR-BERT-b-16
+  dino_name: RAD-DINO
+
+  input_size: 518                  
+  word_len: 256
+  word_dim: 512
+  
+  ladder_dim: 128
+  nhead: 8
+  multi_stage: 3
+  stride: [1, 1, 1]
+  vis_dim: 512
+  fpn_in: [768, 768, 768]
+  fpn_out: [256, 512, 1024]
+  sync_bn: True
+
+
+  num_layers: 3
+  num_head: 8
+  dim_ffn: 512
+  dropout: 0.1
+  intermediate: False 
+  
+  workers: 2                         
+  workers_val: 2                     
+  epochs: 50
+  start_epoch: 0
+  batch_size: 32
+  batch_size_val: 64
+  base_lr: 0.0002                  
+  lr_multi: 1
+  
+  weight_decay: 0.01                 
+  betas: [0.9, 0.999]               
+  eps: 0.00000001                   
+
+  warmup_epochs: 5                   
+  
+  max_norm: 0.                       
+  manual_seed: 42                    
+  print_freq: 25                     
+  
+  exp_name: CXR_DETRIS
+  output_folder: /root/autodl-tmp/output        
+  save_freq: 5                      
+  weight:  
+  resume:  
+  evaluate: True
+
+COCOOP:
+  use_cocoop: True                   
+  n_ctx: 4                           
+  adapter_scale: 0.15              
+  meta_net_hidden_dim: 48           
+  conditional_weight: 0.8          
+  cocoop_debug: False               
+  cocoop_early_fusion: False        
+  cocoop_feature_layers: [3, 6, 9]  
+  normalize_visual_condition: true
+  use_layer_attention: false        
+
+CONTRASTIVE:
+  use_contrastive: False            
+  contrastive_temperature: 0.1     
+  use_dynamic_weights: False
+  
+  early_stage_ratio: 0.3            
+  mid_stage_ratio: 0.7
+
+LOSS:
+  bce_weight: 0.4                  
+  dice_weight: 0.6                  
+
+TEST:
+  test_split: test
+  visualize: False
+
+MISC:
+  amp: False                         
+  deterministic: True               
+  benchmark: False                 
