@@ -26,33 +26,21 @@ warnings.filterwarnings("ignore")
 
 
 def parse_args():
-    """解析命令行参数"""
     parser = argparse.ArgumentParser(description='DETRIS Inference and Visualization (Fixed)')
-    
-    # 基本参数
     parser.add_argument('--config', required=True, help='Config file path')
     parser.add_argument('--checkpoint', required=True, help='Model checkpoint path')
     parser.add_argument('--data-root', help='Dataset root directory')
-    
-    # 推理模式
     parser.add_argument('--mode', choices=['single', 'batch', 'dataset', 'debug'], default='dataset',
                         help='Inference mode (debug mode for testing)')
     
-    # 单张图片推理
     parser.add_argument('--image', help='Single image path')
     parser.add_argument('--text', help='Text description for single image')
-    
-    # 批量推理
     parser.add_argument('--image-dir', help='Directory containing images')
     parser.add_argument('--text-file', help='Text file with descriptions')
-    
-    # 数据集推理
     parser.add_argument('--split', choices=['train', 'val', 'test'], default='val',
                         help='Dataset split')
     parser.add_argument('--num-samples', type=int, default=10,
                         help='Number of samples to process (-1 for all)')
-    
-    # 可视化选项
     parser.add_argument('--output-dir', default='./inference_results_fixed',
                         help='Output directory')
     parser.add_argument('--vis-mode', choices=['overlay', 'side-by-side', 'grid', 'detailed', 'debug'], 
@@ -63,8 +51,6 @@ def parse_args():
                         help='Save overlay visualizations')
     parser.add_argument('--save-comparison', action='store_true', default=True,
                         help='Save comparison grids')
-    
-    # 可视化参数
     parser.add_argument('--threshold', type=float, default=0.5,
                         help='Segmentation threshold')
     parser.add_argument('--alpha', type=float, default=0.6,
@@ -75,12 +61,8 @@ def parse_args():
                         help='Figure size for visualizations')
     parser.add_argument('--dpi', type=int, default=150,
                         help='Output image DPI')
-    
-    # 调试选项
     parser.add_argument('--debug-first-sample', action='store_true',
                         help='Debug the first sample in detail')
-    
-    # 其他选项
     parser.add_argument('--device', default='cuda:0', help='Device for inference')
     parser.add_argument('--batch-size', type=int, default=1, help='Batch size')
     parser.add_argument('--verbose', action='store_true', help='Verbose output')
@@ -89,13 +71,8 @@ def parse_args():
 
 
 def load_config_and_model(config_path, checkpoint_path, device='cuda:0'):
-    """加载配置和模型"""
     logger.info("Loading configuration and model...")
-    
-    # 加载配置
     cfg = config.load_cfg_from_cfg_file(config_path)
-    
-    # 展平配置 (基于test代码)
     flat_config = {}
     for section in ['DATA', 'TRAIN', 'COCOOP', 'CONTRASTIVE', 'LOSS', 'TEST', 'MISC']:
         if hasattr(cfg, section):
@@ -106,13 +83,9 @@ def load_config_and_model(config_path, checkpoint_path, device='cuda:0'):
     
     for key, value in flat_config.items():
         setattr(cfg, key, value)
-    
-    # 构建模型
     model, _ = build_segmenter(cfg)
     model = model.to(device)
     model.eval()
-    
-    # 加载权重 (基于test代码)
     logger.info(f"Loading checkpoint from: {checkpoint_path}")
     checkpoint = torch.load(checkpoint_path, map_location=device)
     
@@ -122,19 +95,14 @@ def load_config_and_model(config_path, checkpoint_path, device='cuda:0'):
         logger.info(f"Checkpoint IoU: {checkpoint.get('best_iou', 'Unknown')}")
     else:
         state_dict = checkpoint
-    
-    # 处理分布式训练的权重
     new_state_dict = {}
     for k, v in state_dict.items():
         if k.startswith('module.'):
-            new_state_dict[k[7:]] = v  # 移除'module.'前缀
+            new_state_dict[k[7:]] = v  
         else:
             new_state_dict[k] = v
     
-    # 获取模型的参数键列表
     model_keys = set(model.state_dict().keys())
-    
-    # 过滤掉模型中不存在的键（特别是动态创建的coord_gate相关键）
     filtered_state_dict = {}
     unexpected_keys = []
     coord_gate_keys = []
@@ -146,14 +114,11 @@ def load_config_and_model(config_path, checkpoint_path, device='cuda:0'):
             unexpected_keys.append(k)
             if 'coord_gate' in k:
                 coord_gate_keys.append(k)
-    
-    # 检查缺失的键
     missing_keys = []
     for k in model_keys:
         if k not in new_state_dict:
             missing_keys.append(k)
     
-    # 打印信息
     if coord_gate_keys:
         logger.info(f"Found {len(coord_gate_keys)} coord_gate related keys in checkpoint (will be ignored due to dynamic initialization)")
         logger.debug(f"Coord_gate keys: {coord_gate_keys}")
@@ -165,8 +130,6 @@ def load_config_and_model(config_path, checkpoint_path, device='cuda:0'):
     
     if missing_keys:
         logger.warning(f"Missing keys in checkpoint: {missing_keys}")
-    
-    # 使用过滤后的state_dict加载，允许不严格匹配
     missing_keys_result, unexpected_keys_result = model.load_state_dict(filtered_state_dict, strict=False)
     
     logger.info("Model loaded successfully!")
@@ -175,85 +138,65 @@ def load_config_and_model(config_path, checkpoint_path, device='cuda:0'):
     return model, cfg
 
 
-@torch.no_grad()
 def predict_sample(model, img_tensor, text, cfg, device, return_raw=False):
-    """对单个样本进行推理 (修复版)"""
-    # 确保模型在评估模式
     model.eval()
-    
-    # 数据移到GPU
-    img = img_tensor.unsqueeze(0).to(device)  # 添加batch维度 [1, 3, H, W]
-    
-    # 文本分词
-    text_tensor = tokenize(text, cfg.word_len).to(device)  # [1, word_len]
-    
-    # 模型推理 - DETRIS在推理时返回未经sigmoid的logits
-    pred = model(img, text_tensor)  # 返回原始logits
-    
-    # 调试信息
+    img = img_tensor.unsqueeze(0).to(device) 
+    text_tensor = tokenize(text, cfg.word_len).to(device)  
+
+    pred = model(img, text_tensor)  
     logger.debug(f"Model output shape: {pred.shape}, dtype: {pred.dtype}")
     logger.debug(f"Output value range: [{pred.min().item():.4f}, {pred.max().item():.4f}]")
-    
-    # 保存原始预测用于调试
     pred_raw = pred.clone() if return_raw else None
-    
-    # 应用sigmoid激活转换为概率
     pred = torch.sigmoid(pred)
     logger.debug(f"After sigmoid range: [{pred.min().item():.4f}, {pred.max().item():.4f}]")
-    
-    # 处理维度：确保输出是 [H, W] 格式
+
     original_shape = pred.shape
-    if len(pred.shape) == 4:  # [B, C, H, W]
-        pred = pred.squeeze(0)  # 移除batch维度 -> [C, H, W]
-        if pred.shape[0] == 1:  # 如果channel=1
-            pred = pred.squeeze(0)  # -> [H, W]
+    if len(pred.shape) == 4:  
+        pred = pred.squeeze(0)  
+        if pred.shape[0] == 1:  
+            pred = pred.squeeze(0)  
         else:
-            # 如果有多个channel，取第一个
             logger.debug(f"Multiple channels detected: {pred.shape[0]}, taking first channel")
             pred = pred[0]  # -> [H, W]
     elif len(pred.shape) == 3:  # [B, H, W] 或 [C, H, W]
-        if pred.shape[0] == 1:  # 很可能是batch维度
+        if pred.shape[0] == 1:  
             pred = pred.squeeze(0)  # -> [H, W]
         else:
-            # 可能是多channel，取第一个
             logger.debug(f"Ambiguous 3D shape: {pred.shape}, taking first dimension")
             pred = pred[0]  # -> [H, W]
-    elif len(pred.shape) == 2:  # [H, W] - 已经是正确格式
+    elif len(pred.shape) == 2:  # [H, W] 
         pass
     else:
         raise ValueError(f"Cannot handle prediction shape: {pred.shape}")
     
     logger.debug(f"Prediction shape transformation: {original_shape} -> {pred.shape}")
     
-    # 确保预测尺寸与输入图像匹配
+
     input_size = img.shape[-2:]  # (H, W)
     pred_size = pred.shape
     
     if pred_size != input_size:
         logger.debug(f"Resizing prediction from {pred_size} to {input_size}")
-        pred = pred.unsqueeze(0).unsqueeze(0)  # 添加batch和channel维度用于插值
+        pred = pred.unsqueeze(0).unsqueeze(0)  
         pred = F.interpolate(
             pred,
             size=input_size,
             mode='bicubic',
             align_corners=True,
             antialias=True
-        ).squeeze()  # 移除添加的维度
+        ).squeeze()  
     
-    # 确保值在[0,1]范围内
     pred = torch.clamp(pred, 0.0, 1.0)
     
-    # 验证最终输出
+
     if len(pred.shape) != 2:
         logger.error(f"Final prediction shape is not 2D: {pred.shape}")
-        # 强制转换为2D
         if pred.numel() == input_size[0] * input_size[1]:
             pred = pred.view(input_size[0], input_size[1])
         else:
             raise ValueError(f"Cannot reshape prediction to target size {input_size}")
     
     if return_raw and pred_raw is not None:
-        # 同样处理原始预测的维度
         if len(pred_raw.shape) == 4:
             pred_raw = pred_raw.squeeze(0)
             if pred_raw.shape[0] == 1:
@@ -272,14 +215,14 @@ def predict_sample(model, img_tensor, text, cfg, device, return_raw=False):
 
 
 def check_model_output_format(model, sample_img, sample_text, cfg, device):
-    """检查模型输出格式的调试函数"""
+
     model.eval()
     
     with torch.no_grad():
         img = sample_img.unsqueeze(0).to(device)
         text_tensor = tokenize(sample_text, cfg.word_len).to(device)
         
-        # 检查模型输出
+
         output = model(img, text_tensor)
         
         print("\n=== 模型输出格式检查 ===")
