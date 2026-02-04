@@ -21,7 +21,7 @@ Below is the overall architecture of **Report-Guided Segmentation**.
 
 ![Framework overview](assets/framework.png.png)
 
-> Tip: place the figure at `assets/framework.png` (see instructions below).
+
 
 ---
 
