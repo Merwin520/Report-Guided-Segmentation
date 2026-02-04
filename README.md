@@ -1,5 +1,3 @@
-# Report-Guided-Segmentation
-PyTorch implementation for report-findings-guided chest X-ray segmentation.
 # Report-Guided Segmentation
 
 **Grounding Radiology Report Findings into Medical Image Segmentation**
