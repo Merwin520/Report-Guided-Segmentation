@@ -69,13 +69,4 @@ We will provide:
 
 ---
 
-## 📄 Citation
 
-If you find this work useful, please consider citing:
-
-```bibtex
-@article{reportguidedseg2025,
-  title={Grounding Radiology Report Findings into Medical Image Segmentation},
-  journal={npj Digital Medicine},
-  year={2025}
-}
